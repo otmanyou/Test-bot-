@@ -12,7 +12,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # إعدادات البوت
-BOT_TOKEN = "7375947460:AAE6E29xYN0F4jZ7dS-ath7E_v1Zun8CrTY"
+BOT_TOKEN = "5175709686:AAEs5-jvaCRmoEK8d0Ix8GUHj2ze3uJ0Abk"
 ADMIN_ID = 5164991393  # ايدي المسؤول
 YOUTUBE_CHANNEL_URL = "https://youtube.com/@l7aj.1m"  # رابط قناة يوتيوب
 
