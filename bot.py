@@ -1,183 +1,138 @@
-import logging
-import marshal
-import dis
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, CallbackContext, filters
-from io import BytesIO
+import requests
+import re
+from user_agent import generate_user_agent
+import telebot
+
+# متغيرات البيئة
 import os
 
-# إعدادات تسجيل الدخول للـ Telegram Bot
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+GROUP_USERNAME = os.getenv("GROUP_USERNAME")
 
-# إعدادات البوت
-BOT_TOKEN = "5175709686:AAEs5-jvaCRmoEK8d0Ix8GUHj2ze3uJ0Abk"
-ADMIN_ID = 5164991393  # ايدي المسؤول
-YOUTUBE_CHANNEL_URL = "https://youtube.com/@l7aj.1m"  # رابط قناة يوتيوب
+bot = telebot.TeleBot(BOT_TOKEN)
 
-# دالة تحقق من الاشتراك في قناة يوتيوب (دالة مزيفة)
-async def check_youtube_subscription(update: Update, context: CallbackContext):
-    # زر "اشترك" أولاً، ثم زر "تحقق"
-    keyboard = [
-        [InlineKeyboardButton("📢 اشترك في القناة", url=YOUTUBE_CHANNEL_URL)],
-        [InlineKeyboardButton("✅ تحقق", callback_data='check_youtube_subscription')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        f"🚫 **عذرًا، عليك الاشتراك في قناة يوتيوب أولاً**:\n\n📢 القناة: [اضغط هنا للاشتراك](https://youtube.com/@l7aj.1m)",
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
+WELCOME_MESSAGE = """\
+*WELCOME TO BOT FREE FIRE MADE BY CODEX TEAM*
+---------------------------------------------------------------------------
+"""
+FEATURES_MESSAGE = """\
+*Choose one of the following features:*
+[1] - Get the player's pet animal 🐾  
+[2] - Get the account age 📅  
+[3] - Send visitors 👥  
+[4] - Send the bot 🤖  
+[5] - Visitors (Lag) 🔄  
+[6] - Get degree of pride 🏆  
+[7] - Check if the player is in the blacklist 🚫  
+[8] - Check if the player is under protection 🛡️  
+[9] - Block ID in write message✋  
+[10] - Get the player's bio 📝  
+"""
+APIS = {
+    "1": "https://fadai-boma-bot-vtwo-pro.vercel.app/pet",
+    "2": "https://fadai-boma-bot-vtwo-pro.vercel.app/log",
+    "3": "https://fadai-boma-bot-vtwo-pro.vercel.app/increase_visitors",
+    "4": "https://fadai-boma-bot-vtwo-pro.vercel.app/send_bot",
+    "5": "https://fadai-boma-bot-vtwo-pro.vercel.app/visit_max",
+    "6": "https://fadai-boma-bot-vtwo-pro.vercel.app/fakhr",
+    "7": "https://fadai-boma-bot-vtwo-pro.vercel.app/acc",
+    "8": "https://fadai-boma-bot-vtwo-pro.vercel.app/acc1",
+    "9": "https://fadai-boma-bot-vtwo-pro.vercel.app/ban",
+    "10": "https://fadai-boma-bot-vtwo-pro.vercel.app/bio",
+}
+HEADERS = {
+    'authority': 'fadai-boma-bot-vtwo-pro.vercel.app',
+    'accept': '*/*',
+    'content-type': 'application/json',
+    'origin': 'https://fadai-boma-bot-vtwo-pro.vercel.app',
+    'referer': 'https://fadai-boma-bot-vtwo-pro.vercel.app/home',
+    'user-agent': generate_user_agent(),
+}
 
-# فك التشفير باستخدام marshal
-def decompile_code(encoded_data):
+# دالة للتحقق من انضمام المستخدم إلى المجموعة
+def is_user_in_group(user_id):
     try:
-        decoded_code = marshal.loads(encoded_data)  # فك الشيفرة
-        if isinstance(decoded_code, (bytes, bytearray)):
-            return None, "البيانات المفكوكة ليست كود Python."
-        else:
-            disassembly = dis.Bytecode(decoded_code).dis()
-            return decoded_code, disassembly
+        member = bot.get_chat_member(chat_id=GROUP_USERNAME, user_id=user_id)
+        if member.status in ['member', 'administrator', 'creator']:
+            return True
+        return False
     except Exception as e:
-        return None, f"حدث خطأ أثناء فك الشيفرة: {str(e)}"
+        print(f"Error checking membership: {e}")
+        return False
 
-# معالجة الرسائل لفك التشفير
-async def handle_decrypt(update: Update, context: CallbackContext) -> None:
-    try:
-        encoded_data = eval(update.message.text)  # تحويل النص إلى بيانات مشفرة
-        if not isinstance(encoded_data, (bytes, bytearray)):
-            await update.message.reply_text("البيانات التي أرسلتها ليست بصيغة مشفرة صحيحة.")
-            return
-
-        # فك تشفير الكود
-        decoded_code, result_decompiled = decompile_code(encoded_data)
-        if decoded_code is None:
-            await update.message.reply_text(result_decompiled)  # رسالة خطأ
-        else:
-            # إعداد نص التعليمات المفككة
-            result_message = f"تم فك التشفير:\n{result_decompiled}"
-
-            # إذا كان النص المفكك طويلًا جدًا، سيتم إرساله عبر ملف
-            if len(result_decompiled) > 4096:  # الحد الأقصى لعدد الحروف في الرسالة
-                # إنشاء ملف يحتوي على التعليمات المفككة
-                file_content = f"# التعليمات المفككة:\n\n{result_decompiled}"
-                file = BytesIO(file_content.encode('utf-8'))
-                file.name = "تم فك تشفيره.txt"
-
-                # إرسال النص والملف
-                await update.message.reply_text("\n\n 🗂نظرًا لطول الرسالة، تم إرسالها عبر ملف."
-                  "\n\n بعد فك تشفير قم بأخد الكود و دخل الى  CHAT GBT  وكتب له قم بترتيب هذا لكود و تحويله الى كود بايثون 📝🩵")                            
-                                                                  
-                await update.message.reply_document(InputFile(file, filename="تم_فك_تشفيره.txt"))
-            else:
-                await update.message.reply_text(result_message)  # إرسال النص المفكك مباشرة
-    except Exception as e:
-        await update.message.reply_text(f"حدث خطأ أثناء معالجة الكود المشفر: {str(e)}")
-
-# وظيفة بدء البوت
-async def start(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-
-    # إرسال رسالة ترحيب للمستخدم مع توضيح وظيفة البوت
-    welcome_message = (
-        "👋 مرحبًا! \n\n"
-        "أنا بوت فك التشفير. يمكنك إرسال بيانات مشفرة بصيغة marshal، وسأساعدك في فك تشفيرها وعرض التعليمات. "
-        "لكن أولًا، عليك الاشتراك في قناة يوتيوب الخاصة بنا لتتمكن من استخدام البوت. "
-        "اضغط على الزر أدناه للتحقق من اشتراكك في القناة."
-      " \n\n [المطور] (@l7l7aj)"
-    )
-    
-    # إرسال رسالة الترحيب
-    await update.message.reply_text(welcome_message, parse_mode="Markdown")
-
-    # تحقق من الاشتراك في قناة يوتيوب
-    await check_youtube_subscription(update, context)
-
-# معالجة الأزرار
-async def button(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    await query.answer()
-
-    if query.data == "check_youtube_subscription":
-        # بمجرد الضغط على "تحقق"، سيتم عرض الأزرار الرئيسية
-        keyboard = [
-            [InlineKeyboardButton("🔓 تفعيل فك التشفير", callback_data='decrypt')],
-        ]
-        if query.from_user.id == ADMIN_ID:
-            keyboard.append([
-                InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"),
-                InlineKeyboardButton("📢 الإذاعة", callback_data="broadcast")
-            ])
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(
-            f"✅ تم التحقق بنجاح! يمكنك الآن استخدام البوت",
-            reply_markup=reply_markup
-        )
-
-    elif query.data == "decrypt":
-        await query.edit_message_text(
-            "من فضلك أرسل الكود المشفر لفك تشفيره.\n\n"
-            "ملاحظة📝: يجب أن يكون تنسيق الكود الذي رسله مثل هكذا:\n"
-            "b'\\xe3\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x04\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\xf3<\\x00\\x00\\x00'\n\n"
-            "🩵وشكرا لك"
-        )
-    elif query.data == "stats":
-        await query.edit_message_text(get_stats())
-    elif query.data == "broadcast":
-        await query.edit_message_text("📢 قسم الإذاعة.")
+@bot.message_handler(commands=['start'])
+def start_message(message):
+    user_id = message.from_user.id
+    if is_user_in_group(user_id):
+        bot.reply_to(message, WELCOME_MESSAGE + FEATURES_MESSAGE, parse_mode="Markdown")
     else:
-        await query.edit_message_text("🚫 هذا الخيار غير متاح.")
+        bot.reply_to(
+            message,
+            f"❌ *Access Denied*: Please join the group {GROUP_USERNAME} to use this bot.",
+            parse_mode="Markdown"
+        )
 
-# وظيفة الحصول على الإحصائيات
-def get_stats():
-    try:
-        with open("users.txt", 'r') as f:
-            users = f.readlines()
+@bot.message_handler(func=lambda msg: msg.text.isdigit() and msg.text in APIS.keys())
+def handle_feature_choice(message):
+    user_id = message.from_user.id
+    if not is_user_in_group(user_id):
+        bot.reply_to(
+            message,
+            f"❌ *Access Denied*: Please join the group {GROUP_USERNAME} to use this bot.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    feature = message.text
+    api_url = APIS[feature]
+    bot.reply_to(message, f"🚀 *Feature {feature}*: Please enter your UID:", parse_mode="Markdown")
+    bot.register_next_step_handler(message, process_feature, feature, api_url)
 
-        users_count = len(users)
-        active_users = len([user for user in users if user.strip().endswith(",active")])  # المستخدمين النشطين
-        stats_message = f"\n\n📊 الإحصائيات:\n\n👥 عدد مستخدمي البوت: {users_count}\n🌟 عدد المستخدمين النشطين: {active_users}"
-        return stats_message
-    except Exception as e:
-        return f"حدث خطأ في الحصول على الإحصائيات: {str(e)}"
+def process_feature(message, feature, api_url):
+    uid = message.text
+    data = {'text': uid}
+    response = requests.post(api_url, headers=HEADERS, json=data)
 
-# إشعار عند انضمام مستخدم جديد
-async def welcome(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
+    if response.status_code == 200:
+        try:
+            msg = response.json().get("message", "").encode('utf-8').decode('unicode_escape')
+            if feature == "1":
+                result = re.search(r"<br>(.*?)\n", msg)
+                pet_name = result.group(1).strip() if result else "No data available."
+                bot.reply_to(message, f"🐾 *Player's Pet Animal*: {pet_name}", parse_mode="Markdown")
+            elif feature == "2":
+                result = re.search(r"\n(.*?)\n", msg)
+                account_age = result.group(1).strip() if result else "No data available."
+                bot.reply_to(message, f"📅 *Account Age*: {account_age}", parse_mode="Markdown")
+            elif feature == "3":
+                bot.reply_to(message, f"👥 *Visitor count increased for UID*: {uid}", parse_mode="Markdown")
+            elif feature == "4":
+                bot.reply_to(message, f"🤖 *Bot successfully sent to UID*: {uid}", parse_mode="Markdown")
+            elif feature == "5":
+                bot.reply_to(message, f"🔄 *Lag created for UID*: {uid}", parse_mode="Markdown")
+            elif feature == "6":
+                result = re.search(r"\n(.*?)\n", msg)
+                pride = result.group(1).strip() if result else "No data available."
+                bot.reply_to(message, f"🏆 *Pride*: {pride}", parse_mode="Markdown")
+            elif feature == "7":
+                result = re.search(r"<br>(.*?)<br>", msg)
+                blacklist_status = result.group(1).strip() if result else "No data available."
+                bot.reply_to(message, f"🚫 *Blacklist status*: {blacklist_status}", parse_mode="Markdown")
+            elif feature == "8":
+                result = re.search(r"<br>(.*?)<br>", msg)
+                protection_status = result.group(1).strip() if result else "No data available."
+                bot.reply_to(message, f"🛡️ *Protection status*: {protection_status}", parse_mode="Markdown")
+            elif feature == "9":
+                bot.reply_to(message, f"✋ *UID blocked*: {uid}", parse_mode="Markdown")
+            elif feature == "10":
+                result = re.search(r"\n(.*?)\n", msg)
+                bio = result.group(1).strip() if result else "No data available."
+                bot.reply_to(message, f"📝 *Bio*: {bio}", parse_mode="Markdown")
+            else:
+                bot.reply_to(message, "❌ *Unknown feature error!*", parse_mode="Markdown")
+        except Exception as e:
+            bot.reply_to(message, f"❌ *Error processing response:* {e}", parse_mode="Markdown")
+    else:
+        bot.reply_to(message, f"❌ *Failed to connect to the server: {response.status_code}*", parse_mode="Markdown")
 
-    # إشعار للمسؤول
-    if user.id != ADMIN_ID:
-        return  # فقط المسؤول يمكنه تلقي الإشعار
-
-    message = f"🚨 **انضم مستخدم جديد!**\n\n"
-    message += f"👤 **الاسم**: {user.first_name} {user.last_name if user.last_name else ''}\n"
-    message += f"🔸 **الاسم المستخدم**: @{user.username}\n"
-    message += f"🆔 **ID**: {user.id}\n"
-
-    await context.bot.send_message(ADMIN_ID, message)
-
-# تسجيل الأخطاء
-def error(update: Update, context: CallbackContext) -> None:
-    logger.warning('Update "%s" caused error "%s"', update, context.error)
-
-# وظيفة بدء التطبيق
-def main():
-    # إعداد التطبيق
-    application = Application.builder().token(BOT_TOKEN).build()
-
-    # تسجيل المعالجين
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button))  # معالج الأزرار
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_decrypt))  # فك التشفير
-    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))  # إشعار عند انضمام مستخدم جديد
-
-    # تسجيل الأخطاء
-    application.add_error_handler(error)
-
-    # بدء التطبيق
-    application.run_polling()
-
-if __name__ == '__main__':
-    main()
+bot.polling()
