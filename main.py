@@ -3,11 +3,8 @@ import re
 from user_agent import generate_user_agent
 import telebot
 
-# متغيرات البيئة
-import os
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_USERNAME = os.getenv("GROUP_USERNAME")
+BOT_TOKEN = "5175709686:AAEs5-jvaCRmoEK8d0Ix8GUHj2ze3uJ0Abk"
+GROUP_USERNAME = "@testmybotforb"  # ضع اسم المستخدم للمجموعة هنا
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -19,13 +16,13 @@ FEATURES_MESSAGE = """\
 *Choose one of the following features:*
 [1] - Get the player's pet animal 🐾  
 [2] - Get the account age 📅  
-[3] - Send visitors 👥  
+[3] - send visitors 👥  
 [4] - Send the bot 🤖  
-[5] - Visitors (Lag) 🔄  
+[5] - visitors (Lag) 🔄  
 [6] - Get degree of pride 🏆  
 [7] - Check if the player is in the blacklist 🚫  
 [8] - Check if the player is under protection 🛡️  
-[9] - Block ID in write message✋  
+[9] - Block id in write message✋  
 [10] - Get the player's bio 📝  
 """
 APIS = {
@@ -49,6 +46,7 @@ HEADERS = {
     'user-agent': generate_user_agent(),
 }
 
+
 # دالة للتحقق من انضمام المستخدم إلى المجموعة
 def is_user_in_group(user_id):
     try:
@@ -60,8 +58,15 @@ def is_user_in_group(user_id):
         print(f"Error checking membership: {e}")
         return False
 
+# التأكد من أن الرسالة ليست من مجموعة
+def is_private_chat(message):
+    return message.chat.type == "private"
+
 @bot.message_handler(commands=['start'])
 def start_message(message):
+    if not is_private_chat(message):
+        return  # تجاهل الرسائل الواردة من المجموعات
+    
     user_id = message.from_user.id
     if is_user_in_group(user_id):
         bot.reply_to(message, WELCOME_MESSAGE + FEATURES_MESSAGE, parse_mode="Markdown")
@@ -74,6 +79,9 @@ def start_message(message):
 
 @bot.message_handler(func=lambda msg: msg.text.isdigit() and msg.text in APIS.keys())
 def handle_feature_choice(message):
+    if not is_private_chat(message):
+        return  # تجاهل الرسائل الواردة من المجموعات
+    
     user_id = message.from_user.id
     if not is_user_in_group(user_id):
         bot.reply_to(
@@ -89,6 +97,9 @@ def handle_feature_choice(message):
     bot.register_next_step_handler(message, process_feature, feature, api_url)
 
 def process_feature(message, feature, api_url):
+    if not is_private_chat(message):
+        return  # تجاهل الرسائل الواردة من المجموعات
+    
     uid = message.text
     data = {'text': uid}
     response = requests.post(api_url, headers=HEADERS, json=data)
